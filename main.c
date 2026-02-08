@@ -376,7 +376,7 @@ void UpdateDrawFrame(void)
         }
     }
 
-    DrawRectangle(10, 10, 320, 240, Fade(BLACK, 0.8f));
+    DrawRectangle(10, 10, 320, 440, Fade(BLACK, 0.8f));
     DrawRectangleLines(10, 10, 320, 440, DARKGRAY);
     int yOff = 20;
     DrawText("CONTROLS:", 20, yOff, 40, BLUE); yOff += 50;
