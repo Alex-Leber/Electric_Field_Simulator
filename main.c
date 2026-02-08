@@ -415,7 +415,7 @@ int main(void)
     cameraYaw = atan2f(forward.x, forward.z);
 
     charges[0] = (Charge){{-8, 0, 0}, 2.0f};
-    charges[1] = (Charge){{8, 0, 0}, -2.0f};
+    charges[1] = (Charge){{8, 0, 0}, -8.0f};
     numCharges = 2;
 
     DisableCursor();
