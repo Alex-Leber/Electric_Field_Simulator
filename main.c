@@ -5,7 +5,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-// Required for the web build
 #if defined(PLATFORM_WEB)
     #include <emscripten/emscripten.h>
     #include <emscripten/html5.h>
@@ -19,7 +18,6 @@ typedef struct Charge {
     float value;
 } Charge;
 
-// GLOBAL STATE VARIABLES
 const int initialWidth = 1920;
 const int initialHeight = 1080;
 
@@ -34,7 +32,7 @@ float cameraYaw = 0.0f;
 float cameraPitch = 0.0f;
 bool isCameraFirstFrame = true;
 
-// Simulation Settings
+// simulation Settings
 int fieldLineSteps = 3000;
 int lineResolution = 3;
 
@@ -44,7 +42,6 @@ int inputLength = 0;
 bool isTyping = false;
 
 // Helper Functions
-
 void DrawInfiniteGrid() {
     int slices = 100;
     float spacing = 1.0f;
@@ -92,7 +89,7 @@ Color CustomColorLerp(Color c1, Color c2, float amount) {
     };
 }
 
-// --- RESIZE CALLBACK (WEB ONLY) ---
+// Resize callback
 #if defined(PLATFORM_WEB)
 EM_BOOL OnWindowResize(int eventType, const EmscriptenUiEvent *uiEvent, void *userData) {
     // Sync Raylib's internal buffer size with the new browser window size
@@ -101,7 +98,7 @@ EM_BOOL OnWindowResize(int eventType, const EmscriptenUiEvent *uiEvent, void *us
 }
 #endif
 
-// --- CUSTOM CAMERA LOGIC ---
+// Custom camera logic
 void UpdateCustomCamera(void) {
     Vector2 mouseDelta = GetMouseDelta();
     
@@ -139,10 +136,10 @@ void UpdateCustomCamera(void) {
     camera.target = Vector3Add(camera.position, forward);
 }
 
-// --- MAIN LOOP FUNCTION ---
+// Main loop
 void UpdateDrawFrame(void)
 {
-    // --- INPUT HANDLING ---
+    // input handling
     if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && !IsCursorHidden() && freeCameraMode) {
         DisableCursor();
         isCameraFirstFrame = true;
@@ -191,7 +188,6 @@ void UpdateDrawFrame(void)
                 // Ensure no charge is selected so we don't drag nothing
                 selectedCharge = -1; 
 
-                // NEW LOGIC START 
                 // If we are ALREADY typing and have a value, this click means "PLACE IT"
                 if (isTyping && inputLength > 0) {
                     float val = strtof(chargeInput, NULL);
@@ -261,7 +257,7 @@ void UpdateDrawFrame(void)
         if (IsKeyPressed(KEY_ESCAPE)) isTyping = false;
     }
 
-    // --- RENDER ---
+    // Render
     BeginDrawing();
     ClearBackground(BLACK);
 
@@ -366,7 +362,7 @@ void UpdateDrawFrame(void)
         EndBlendMode();
     EndMode3D();
 
-    // --- HUD ---
+    // Hud
     for(int i=0; i<numCharges; i++) {
         Vector2 pos = GetWorldToScreen(charges[i].position, camera);
         if (pos.x > 0 && pos.x < GetScreenWidth() && pos.y > 0 && pos.y < GetScreenHeight()) {
@@ -421,7 +417,7 @@ int main(void)
     DisableCursor();
 
 #if defined(PLATFORM_WEB)
-    // 1. Get the current size of the browser window (element size)
+    // 1: Get the current size of the browser window (element size)
     double w = initialWidth;
     double h = initialHeight;
 
@@ -434,7 +430,7 @@ int main(void)
         SetWindowSize((int)w, (int)h);
     }
 
-    // 2. Register the callback so resizing works later
+    // 2: Register the callback so resizing works later
     emscripten_set_resize_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, NULL, EM_FALSE, OnWindowResize);
 
     emscripten_set_main_loop(UpdateDrawFrame, 0, 1);
