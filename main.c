@@ -10,7 +10,7 @@
     #include <emscripten/html5.h>
 #endif
 
-#define MAX_CHARGES 100
+#define MAX_CHARGES 50
 #define FIELD_LINE_STEP_SIZE 0.05f
 
 typedef struct Charge {
@@ -27,16 +27,16 @@ int numCharges = 0;
 int selectedCharge = -1;
 bool freeCameraMode = true;
 
-// Custom Camera State
+//camera state
 float cameraYaw = 0.0f;
 float cameraPitch = 0.0f;
 bool isCameraFirstFrame = true;
 
-// simulation Settings
+//simulation Settings
 int fieldLineSteps = 3000;
-int lineResolution = 3;
+int lineResolution = 2;
 
-// UI State
+//UI State
 char chargeInput[16] = "";
 int inputLength = 0;
 bool isTyping = false;
@@ -403,16 +403,18 @@ int main(void)
     camera.position = (Vector3){ 15.0f, 15.0f, 15.0f };
     camera.target = (Vector3){ 0.0f, 0.0f, 0.0f };
     camera.up = (Vector3){ 0.0f, 1.0f, 0.0f };
-    camera.fovy = 45.0f;
+    camera.fovy = 70.0f;
     camera.projection = CAMERA_PERSPECTIVE;
     
     Vector3 forward = Vector3Normalize(Vector3Subtract(camera.target, camera.position));
     cameraPitch = asinf(forward.y);
     cameraYaw = atan2f(forward.x, forward.z);
 
-    charges[0] = (Charge){{-8, 0, 0}, 2.0f};
-    charges[1] = (Charge){{8, 0, 0}, -8.0f};
-    numCharges = 2;
+    charges[0] = (Charge){{-8, 8, 0}, 10.0f};
+    charges[1] = (Charge){{8, 8, 0}, -10.0f};
+    charges[2] = (Charge){{8, -8, 0}, 10.0f};
+    charges[3] = (Charge){{-8, -8, 0}, -10.0f};
+    numCharges = 4;
 
     DisableCursor();
 
