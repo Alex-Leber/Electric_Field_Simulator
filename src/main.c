@@ -378,24 +378,25 @@ void UpdateDrawFrame(void)
         }
     }
 
-    DrawRectangle(10, 10, 320, 440, Fade(BLACK, 0.8f));
-    DrawRectangleLines(10, 10, 320, 440, DARKGRAY);
+    DrawRectangle(10, 10, 370, 370, Fade(BLACK, 0.6f));
+    DrawRectangleLines(10, 10, 370, 370, DARKGRAY);
 
     Vector2 posText = {20, 20};
 
     DrawTextEx(roboto_regular, "CONTROLS:", posText, 40, 2.0f, BLUE); posText.y += 50;
-    DrawTextEx(roboto_regular, "[F] Toggle Cam/Mouse", posText, 30, 2.0f, WHITE); posText.y  += 50;
-    DrawTextEx(roboto_regular, "L-Click to Create Charge", posText, 20, 2.0f, ORANGE); posText.y  += 40;
-    DrawTextEx(roboto_regular, "L-Click Drag: Move", posText, 20, 2.0f, WHITE); posText.y  += 40;
-    DrawTextEx(roboto_regular, "R-Click: Delete", posText, 20, 2.0f, WHITE); posText.y  += 80;
+    DrawTextEx(roboto_regular, "W,A,S,D: Move Camera", posText, 28, 2.0f, WHITE); posText.y  += 50;
+    DrawTextEx(roboto_regular, "[F] Toggle Cam/Placement Mode", posText, 23, 2.0f, WHITE); posText.y  += 30;
+    DrawTextEx(roboto_regular, "  L-Click: Create Charge", posText, 20, 2.0f, ORANGE); posText.y  += 30;
+    DrawTextEx(roboto_regular, "  L-Click Drag: Move Charge", posText, 20, 2.0f, WHITE); posText.y  += 30;
+    DrawTextEx(roboto_regular, "  R-Click: Delete", posText, 20, 2.0f, WHITE); posText.y  += 40;
 
-    DrawTextEx(roboto_regular, "Arrow Keys: Density/Length:", posText, 20, 2.0f, YELLOW); posText.y  += 40;
-    DrawTextEx(roboto_regular, TextFormat("(up/down) Line Density: %d", lineResolution), posText, 20, 2.0f, WHITE); posText.y  += 40;
-    DrawTextEx(roboto_regular, TextFormat("(left/right) Line Steps: %d", fieldLineSteps), posText, 20, 2.0f, WHITE); posText.y  += 40;
+    DrawTextEx(roboto_regular, "Arrow Keys: Density/Length:", posText, 24, 2.0f, ORANGE); posText.y  += 30;
+    DrawTextEx(roboto_regular, TextFormat("  (up/down) Line Density: %d", lineResolution), posText, 20, 2.0f, WHITE); posText.y  += 30;
+    DrawTextEx(roboto_regular, TextFormat("  (left/right) Line Steps: %d", fieldLineSteps), posText, 20, 2.0f, WHITE); posText.y  += 30;
 
 
     if (isTyping) {
-        DrawTextEx(roboto_regular, "ENTER VALUE:", posText, 30, 2.0f, GREEN); posText.x += 180;
+        DrawTextEx(roboto_regular, "ENTER VALUE:", posText, 28, 2.0f, GREEN); posText.x += 190;
         DrawTextEx(roboto_bold, TextFormat("%s_", chargeInput), posText, 30, 2.0f, GREEN);
     }
 
@@ -409,8 +410,10 @@ int main(void)
     InitWindow(initialWidth, initialHeight, "Electric Field Simulator");
 
     // Configure fonts
-    roboto_regular = LoadFont("Fonts/Roboto/Roboto-Regular.ttf");
-    roboto_bold = LoadFont("Fonts/Roboto/Roboto-SemiBold.ttf");
+    roboto_regular = LoadFontEx("Fonts/Roboto/Roboto-Regular.ttf", 64, NULL, 0);
+    roboto_bold = LoadFontEx("Fonts/Roboto/Roboto-SemiBold.ttf", 64, NULL, 0);
+    SetTextureFilter(roboto_regular.texture, TEXTURE_FILTER_BILINEAR);
+    SetTextureFilter(roboto_bold.texture, TEXTURE_FILTER_BILINEAR);
 
     // Initialize Camera
     camera.position = (Vector3){ 15.0f, 15.0f, 15.0f };
