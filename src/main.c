@@ -185,7 +185,7 @@ void UpdateDrawFrame(void)
 
     
     if (!freeCameraMode) {
-        if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+        if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) || IsKeyPressed(KEY_ENTER)) {
             bool clickedCharge = false;
 
             // First, check if we clicked an EXISTING charge (to select/drag)
@@ -200,7 +200,7 @@ void UpdateDrawFrame(void)
             }
 
             // If we clicked EMPTY SPACE
-            if (!clickedCharge || IsKeyPressed(KEY_ENTER)) {
+            if (!clickedCharge) {
                 // Ensure no charge is selected so we don't drag nothing
                 selectedCharge = -1; 
 
