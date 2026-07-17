@@ -10,13 +10,14 @@
     #include <emscripten/html5.h>
 #endif
 
-#define MAX_CHARGES 50
+#define MAX_CHARGES 100
 #define FIELD_LINE_STEP_SIZE 0.05f
 
 typedef struct Charge {
     Vector3 position;
     float value;
-} Charge;
+} 
+Charge;
 
 const int initialWidth = 1920;
 const int initialHeight = 1080;
@@ -133,8 +134,8 @@ void UpdateCustomCamera(void) {
     if (IsKeyDown(KEY_S)) move = Vector3Subtract(move, forward);
     if (IsKeyDown(KEY_D)) move = Vector3Add(move, right);
     if (IsKeyDown(KEY_A)) move = Vector3Subtract(move, right);
-    if (IsKeyDown(KEY_LEFT_CONTROL)) move.y += 1.0f;
-    if (IsKeyDown(KEY_LEFT_SHIFT)) move.y -= 1.0f;
+    if (IsKeyDown(KEY_LEFT_SHIFT)) move.y += 1.0f;
+    if (IsKeyDown(KEY_LEFT_CONTROL)) move.y -= 1.0f;
 
     camera.position = Vector3Add(camera.position, Vector3Scale(move, speed));
     camera.target = Vector3Add(camera.position, forward);
@@ -160,19 +161,30 @@ void UpdateDrawFrame(void)
         }
     }
 
-    if (freeCameraMode) {
-        if (IsCursorHidden()) UpdateCustomCamera();
+    if (freeCameraMode && IsCursorHidden) {
+        UpdateCustomCamera();
     }
 
     Vector2 mouse = GetMousePosition();
     Ray ray = GetMouseRay(mouse, camera);
 
-    if (!freeCameraMode) {
-        if (IsKeyDown(KEY_UP)) fieldLineSteps += 5;
-        if (IsKeyDown(KEY_DOWN)) if ((fieldLineSteps -= 5) < 10) fieldLineSteps = 10;
-        if (IsKeyPressed(KEY_RIGHT)) lineResolution++;
-        if (IsKeyPressed(KEY_LEFT)) if (--lineResolution < 1) lineResolution = 1;
+    // Line density and draw length
+    if (IsKeyDown(KEY_UP)) 
+        fieldLineSteps += 5;
 
+    if (IsKeyDown(KEY_DOWN)) 
+        if ((fieldLineSteps -= 5) < 10) 
+            fieldLineSteps = 10;
+
+    if (IsKeyPressed(KEY_RIGHT)) 
+        lineResolution++;
+
+    if (IsKeyPressed(KEY_LEFT)) 
+        if (--lineResolution < 1) 
+            lineResolution = 1;
+
+    
+    if (!freeCameraMode) {
         if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
             bool clickedCharge = false;
 
@@ -188,7 +200,7 @@ void UpdateDrawFrame(void)
             }
 
             // If we clicked EMPTY SPACE
-            if (!clickedCharge) {
+            if (!clickedCharge || IsKeyPressed(KEY_ENTER)) {
                 // Ensure no charge is selected so we don't drag nothing
                 selectedCharge = -1; 
 
@@ -220,8 +232,10 @@ void UpdateDrawFrame(void)
         if (selectedCharge != -1) {
             if (IsMouseButtonDown(MOUSE_BUTTON_LEFT)) {
                 Vector3 groundPos;
-                if (GetGroundIntersection(ray, &groundPos)) charges[selectedCharge].position = groundPos;
-            } else selectedCharge = -1;
+                if (GetGroundIntersection(ray, &groundPos)) 
+                    charges[selectedCharge].position = groundPos;
+            } else 
+                selectedCharge = -1;
         }
 
         if (IsMouseButtonPressed(MOUSE_BUTTON_RIGHT)) {
