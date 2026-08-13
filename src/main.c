@@ -161,7 +161,7 @@ void UpdateDrawFrame(void)
         }
     }
 
-    if (freeCameraMode && IsCursorHidden) {
+    if (freeCameraMode && IsCursorHidden()) {
         UpdateCustomCamera();
     }
 
@@ -413,6 +413,9 @@ void UpdateDrawFrame(void)
         DrawTextEx(roboto_regular, "ENTER VALUE:", posText, 28, 2.0f, GREEN); posText.x += 190;
         DrawTextEx(roboto_bold, TextFormat("%s_", chargeInput), posText, 30, 2.0f, GREEN);
     }
+
+    // benchmarking
+    DrawFPS(400, 20);
 
     EndDrawing();
 }
