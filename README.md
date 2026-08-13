@@ -23,7 +23,7 @@
 
 ## Overview
 
-Drop point charges into a 3D scene and watch the electric field render itself in real time. Field lines are traced live by numerically integrating the net field of every charge, so the picture updates the instant you add, move, or delete a charge. Fly around the scene freely to inspect the structure from any angle. Students will benefit from the hands-on learning experience of visualizing complex charge configurations in real time.
+Drop point charges into a 3D scene and watch the electric field render itself in real time. Field lines are traced live by numerically integrating the net field of every charge, so the picture updates the instant you add, move, or delete a charge. Physics students can simulate complex charge configurations. Fly around the scene freely to inspect the structure from any angle. 
 The entire simulation, physics, rendering, and UI, is a single C program built on [raylib](https://www.raylib.com/), compiled to **WebAssembly** via **Emscripten** and rendered through **WebGL 2**. The `.wasm` runs directly in the browser.
 
 ## Features
