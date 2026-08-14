@@ -46,6 +46,28 @@ char chargeInput[16] = "";
 int inputLength = 0;
 bool isTyping = false;
 
+// Optimizations
+// -----------------------------------------------------------------------------
+// Field line geometry cache
+//
+// Field lines only depend on charge positions/values and the sim settings.
+// We trace them ONCE into this buffer whenever something changes (fieldDirty),
+// and every other frame just replays the cached vertices. Idle-frame physics
+// cost drops to zero.
+// -----------------------------------------------------------------------------
+typedef struct LineVertex {
+    float x, y, z;
+    unsigned char r, g, b, a;
+} LineVertex;
+
+static LineVertex *lineVerts = NULL;   // heap buffer, grown on demand
+static int lineVertCount = 0;          // vertices currently in cache (2 per segment)
+static long lineVertCapacity = 0;      // allocated vertex slots
+static bool fieldDirty = true;         // set true whenever charges/settings change
+static double lastRetraceMs = 0.0;     // how long the last full retrace took
+
+// -----------------------------------------------------------------------------
+
 // Helper Functions
 void DrawInfiniteGrid() {
     int slices = 100;
@@ -92,6 +114,144 @@ Color CustomColorLerp(Color c1, Color c2, float amount) {
         (unsigned char)((c1.b * invAmount + c2.b * iAmount) >> 8),
         255
     };
+}
+
+// -----------------------------------------------------------------------------
+// Trace all field lines into the vertex cache. This is the ONLY place the
+// physics runs. Called only when fieldDirty is true.
+// -----------------------------------------------------------------------------
+void RetraceFieldLines(void) {
+    double tStart = GetTime();
+
+    int num_phi = 4 * lineResolution;
+    int num_theta = 3 * lineResolution;
+    float startRadius = 0.1f;
+
+    // Worst-case buffer size: every seed line runs all its steps,
+    // 2 vertices per segment. Grow the buffer if needed.
+    int positives = 0;
+    for (int i = 0; i < numCharges; i++)
+        if (charges[i].value > 0) positives++;
+
+    long needed = (long)positives * (num_theta - 1) * num_phi * fieldLineSteps * 2;
+    if (needed > lineVertCapacity) {
+        LineVertex *grown = (LineVertex *)realloc(lineVerts, sizeof(LineVertex) * needed);
+        if (!grown) {                 // allocation failed: keep old cache, bail
+            fieldDirty = false;
+            return;
+        }
+        lineVerts = grown;
+        lineVertCapacity = needed;
+    }
+
+    lineVertCount = 0;
+
+    for (int j = 0; j < numCharges; j++) {
+        if (charges[j].value <= 0) continue; 
+
+        for (int t = 1; t < num_theta; t++) {
+            float theta = PI * t / num_theta;
+            float sinTheta = sinf(theta);
+            float cosTheta = cosf(theta);
+
+            for (int p = 0; p < num_phi; p++) {
+                float phi = 2.0f * PI * p / num_phi;
+                
+                float x = charges[j].position.x + startRadius * sinTheta * cosf(phi);
+                float y = charges[j].position.y + startRadius * sinTheta * sinf(phi);
+                float z = charges[j].position.z + startRadius * cosTheta;
+
+                for (int step = 0; step < fieldLineSteps; step++) {
+                    float dx = 0, dy = 0, dz = 0;
+                    float minDistToNeg = 10000.0f;
+                    float minDistToPos = 10000.0f;
+                    bool hitSink = false;
+
+                    for (int k = 0; k < numCharges; k++) {
+                        float rx = x - charges[k].position.x;
+                        float ry = y - charges[k].position.y;
+                        float rz = z - charges[k].position.z;
+                        float r2 = rx*rx + ry*ry + rz*rz;
+
+                        if (r2 < 0.04f) { 
+                            if (charges[k].value < 0) hitSink = true;
+                        }
+                        float r = sqrtf(r2);
+
+                        if (charges[k].value > 0) {
+                            if (r < minDistToPos) minDistToPos = r;
+                        } else {
+                            if (r < minDistToNeg) minDistToNeg = r;
+                        }
+                        
+                        float rInv = 1.0f / r;
+                        float rInv3 = rInv * rInv * rInv;
+                        float s = charges[k].value * rInv3;
+
+                        dx += s * rx;
+                        dy += s * ry;
+                        dz += s * rz;
+                    }
+
+                    if (hitSink) break;
+
+                    float magSq = dx*dx + dy*dy + dz*dz;
+                    if (magSq < 1e-12f) break;
+                    
+                    float invMag = 1.0f / sqrtf(magSq);
+                    dx *= invMag; dy *= invMag; dz *= invMag;
+
+                    Vector3 start = { x, y, z };
+                    x += dx * FIELD_LINE_STEP_SIZE;
+                    y += dy * FIELD_LINE_STEP_SIZE;
+                    z += dz * FIELD_LINE_STEP_SIZE;
+                    
+                    if (x*x + y*y + z*z > 2500.0f) break;
+
+                    float mix = minDistToPos / (minDistToPos + minDistToNeg + 0.001f);
+                    mix = powf(mix, 0.7f); 
+
+                    Color col = CustomColorLerp(BLUE, RED, mix);
+                    float alpha = 1.0f;
+                    if (step > fieldLineSteps - 50) alpha = (fieldLineSteps - step) / 50.0f;
+                    if (minDistToNeg > 20.0f) alpha *= 0.5f;
+
+                    Color finalCol = Fade(col, 0.6f * alpha);
+
+                    // Write segment into the cache instead of the render batch
+                    LineVertex *v = &lineVerts[lineVertCount];
+                    v[0] = (LineVertex){ start.x, start.y, start.z,
+                                         finalCol.r, finalCol.g, finalCol.b, finalCol.a };
+                    v[1] = (LineVertex){ x, y, z,
+                                         finalCol.r, finalCol.g, finalCol.b, finalCol.a };
+                    lineVertCount += 2;
+                }
+            }
+        }
+    }
+
+    lastRetraceMs = (GetTime() - tStart) * 1000.0;
+    fieldDirty = false;
+}
+
+// Replay the cached vertices. No physics here — just fills the render batch.
+void DrawCachedFieldLines(void) {
+    if (lineVertCount == 0) return;
+
+    BeginBlendMode(BLEND_ADDITIVE);
+    rlBegin(RL_LINES);
+
+    for (int i = 0; i < lineVertCount; i += 2) {
+        rlCheckRenderBatchLimit(2);
+        LineVertex *v = &lineVerts[i];
+        rlColor4ub(v[0].r, v[0].g, v[0].b, v[0].a);
+        rlVertex3f(v[0].x, v[0].y, v[0].z);
+        rlColor4ub(v[1].r, v[1].g, v[1].b, v[1].a);
+        rlVertex3f(v[1].x, v[1].y, v[1].z);
+    }
+
+    rlEnd();
+    EndBlendMode();
 }
 
 // Resize callback
@@ -168,20 +328,28 @@ void UpdateDrawFrame(void)
     Vector2 mouse = GetMousePosition();
     Ray ray = GetMouseRay(mouse, camera);
 
-    // Line density and draw length
-    if (IsKeyDown(KEY_UP)) 
+    // Line density and draw length — these change the geometry, so mark dirty
+    if (IsKeyDown(KEY_UP)) {
         fieldLineSteps += 5;
+        fieldDirty = true;
+    }
 
-    if (IsKeyDown(KEY_DOWN)) 
+    if (IsKeyDown(KEY_DOWN)) {
         if ((fieldLineSteps -= 5) < 10) 
             fieldLineSteps = 10;
+        fieldDirty = true;
+    }
 
-    if (IsKeyPressed(KEY_RIGHT)) 
+    if (IsKeyPressed(KEY_RIGHT)) {
         lineResolution++;
+        fieldDirty = true;
+    }
 
-    if (IsKeyPressed(KEY_LEFT)) 
+    if (IsKeyPressed(KEY_LEFT)) {
         if (--lineResolution < 1) 
             lineResolution = 1;
+        fieldDirty = true;
+    }
 
     
     if (!freeCameraMode) {
@@ -212,6 +380,7 @@ void UpdateDrawFrame(void)
                     if (val != 0.0f && GetGroundIntersection(ray, &spawnPos)) {
                         if (numCharges < MAX_CHARGES) {
                             charges[numCharges++] = (Charge){spawnPos, val};
+                            fieldDirty = true;   // new charge changes the field
                         }
                         // Reset AFTER placing
                         isTyping = false;
@@ -232,8 +401,13 @@ void UpdateDrawFrame(void)
         if (selectedCharge != -1) {
             if (IsMouseButtonDown(MOUSE_BUTTON_LEFT)) {
                 Vector3 groundPos;
-                if (GetGroundIntersection(ray, &groundPos)) 
-                    charges[selectedCharge].position = groundPos;
+                if (GetGroundIntersection(ray, &groundPos)) {
+                    // Only retrace if the charge actually moved
+                    if (!Vector3Equals(charges[selectedCharge].position, groundPos)) {
+                        charges[selectedCharge].position = groundPos;
+                        fieldDirty = true;
+                    }
+                }
             } else 
                 selectedCharge = -1;
         }
@@ -249,6 +423,7 @@ void UpdateDrawFrame(void)
             if (deleteIndex != -1) {
                 for (int k = deleteIndex; k < numCharges - 1; k++) charges[k] = charges[k + 1];
                 numCharges--; isTyping = false;
+                fieldDirty = true;   // removed charge changes the field
             }
         }
     }
@@ -267,13 +442,18 @@ void UpdateDrawFrame(void)
             if (numCharges < MAX_CHARGES && inputLength > 0) {
                 float val = strtof(chargeInput, NULL);
                 Vector3 spawnPos;
-                if (val != 0.0f && GetGroundIntersection(ray, &spawnPos)) 
+                if (val != 0.0f && GetGroundIntersection(ray, &spawnPos)) {
                     charges[numCharges++] = (Charge){spawnPos, val};
+                    fieldDirty = true;   // new charge changes the field
+                }
             }
             isTyping = false;
         }
         if (IsKeyPressed(KEY_ESCAPE)) isTyping = false;
     }
+
+    // Recompute field line geometry only when something changed
+    if (fieldDirty) RetraceFieldLines();
 
     // Render
     BeginDrawing();
@@ -290,94 +470,7 @@ void UpdateDrawFrame(void)
         }
 
         rlDrawRenderBatchActive();      
-        BeginBlendMode(BLEND_ADDITIVE);
-        rlBegin(RL_LINES);
-
-        int num_phi = 4 * lineResolution; 
-        int num_theta = 3 * lineResolution; 
-        float startRadius = 0.1f;
-
-        for (int j = 0; j < numCharges; j++) {
-            if (charges[j].value <= 0) continue; 
-
-            for (int t = 1; t < num_theta; t++) {
-                float theta = PI * t / num_theta;
-                float sinTheta = sinf(theta);
-                float cosTheta = cosf(theta);
-
-                for (int p = 0; p < num_phi; p++) {
-                    float phi = 2.0f * PI * p / num_phi;
-                    
-                    float x = charges[j].position.x + startRadius * sinTheta * cosf(phi);
-                    float y = charges[j].position.y + startRadius * sinTheta * sinf(phi);
-                    float z = charges[j].position.z + startRadius * cosTheta;
-
-                    for (int step = 0; step < fieldLineSteps; step++) {
-                        float dx = 0, dy = 0, dz = 0;
-                        float minDistToNeg = 10000.0f;
-                        float minDistToPos = 10000.0f;
-                        bool hitSink = false;
-
-                        for (int k = 0; k < numCharges; k++) {
-                            float rx = x - charges[k].position.x;
-                            float ry = y - charges[k].position.y;
-                            float rz = z - charges[k].position.z;
-                            float r2 = rx*rx + ry*ry + rz*rz;
-
-                            if (r2 < 0.04f) { 
-                                if (charges[k].value < 0) hitSink = true;
-                            }
-                            float r = sqrtf(r2);
-
-                            if (charges[k].value > 0) {
-                                if (r < minDistToPos) minDistToPos = r;
-                            } else {
-                                if (r < minDistToNeg) minDistToNeg = r;
-                            }
-                            
-                            float rInv = 1.0f / r;
-                            float rInv3 = rInv * rInv * rInv;
-                            float s = charges[k].value * rInv3;
-
-                            dx += s * rx;
-                            dy += s * ry;
-                            dz += s * rz;
-                        }
-
-                        if (hitSink) break;
-
-                        float magSq = dx*dx + dy*dy + dz*dz;
-                        if (magSq < 1e-12f) break;
-                        
-                        float invMag = 1.0f / sqrtf(magSq);
-                        dx *= invMag; dy *= invMag; dz *= invMag;
-
-                        Vector3 start = { x, y, z };
-                        x += dx * FIELD_LINE_STEP_SIZE;
-                        y += dy * FIELD_LINE_STEP_SIZE;
-                        z += dz * FIELD_LINE_STEP_SIZE;
-                        
-                        if (x*x + y*y + z*z > 2500.0f) break;
-
-                        float mix = minDistToPos / (minDistToPos + minDistToNeg + 0.001f);
-                        mix = powf(mix, 0.7f); 
-
-                        Color col = CustomColorLerp(BLUE, RED, mix);
-                        float alpha = 1.0f;
-                        if (step > fieldLineSteps - 50) alpha = (fieldLineSteps - step) / 50.0f;
-                        if (minDistToNeg > 20.0f) alpha *= 0.5f;
-
-                        rlCheckRenderBatchLimit(2);
-                        Color finalCol = Fade(col, 0.6f * alpha);
-                        rlColor4ub(finalCol.r, finalCol.g, finalCol.b, finalCol.a);
-                        rlVertex3f(start.x, start.y, start.z);
-                        rlVertex3f(x, y, z);
-                    }
-                }
-            }
-        }
-        rlEnd();
-        EndBlendMode();
+        DrawCachedFieldLines();
     EndMode3D();
 
     //Custom Hud
@@ -415,7 +508,16 @@ void UpdateDrawFrame(void)
     }
 
     // benchmarking
-    DrawFPS(400, 20);
+    int y_pos = 20;
+    int num_phi = 4 * lineResolution;
+    int num_theta = 3 * lineResolution;
+    int seedsPerCharge = (num_theta - 1) * num_phi;
+
+    DrawFPS(400, y_pos); y_pos += 25;
+    DrawText(TextFormat("Retrace: %.2f ms", lastRetraceMs), 400, y_pos, 30, GREEN); y_pos += 30;
+    DrawText(TextFormat("Segments: %d", lineVertCount / 2), 400, y_pos, 30, GREEN); y_pos += 30;
+    DrawText(TextFormat("Lines/charge: %d", seedsPerCharge), 400, y_pos, 30, GREEN); y_pos += 30;
+    DrawText(TextFormat("Charges: %d", numCharges), 400, y_pos, 30, GREEN); y_pos += 30;
 
     EndDrawing();
 }
@@ -477,6 +579,7 @@ int main(void)
     }
 #endif
 
+    free(lineVerts);
     CloseWindow();
     return 0;
 }
